@@ -2,12 +2,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include<ncurses.h>
 
-// Definimos los registros como un arreglo global para fácil acceso
-// 0: EAX, 1: EBX, 2: ECX, 3: EDX
+
+// Definimos los registros como un arreglo global
 int registros[4] = {0, 0, 0, 0};
 
-// Función auxiliar para obtener el índice del registro basado en su nombre
+//  obtener el índice del registro basado en su nombre
 int obtener_indice_registro(char *nombre) {
     if (strcmp(nombre, "EAX") == 0) return 0;
     if (strcmp(nombre, "EBX") == 0) return 1;
@@ -19,7 +20,7 @@ int obtener_indice_registro(char *nombre) {
 // Función para verificar si un token es un número
 int es_numero(char *str) {
     if (str == NULL || *str == '\0') return 0;
-    //desidivos si es negativo o positivo
+    //desdivos si es negativo o positivo
     int i = 0;
     if (str[0] != '-') i=1;
     //recorremos el texto
@@ -48,49 +49,62 @@ int main() {
     char instruccion[10];
     char operando1[10];
     char operando2[10];
-    int PC = 0; // Program Counter (Contador de Programa)
+    int PC = 0; // Program Counter 
 
-    // 1. APERTURA DE ARCHIVO (fopen)
+    //NCURSES
+    initscr();             
+    cbreak();              
+    noecho();               
+    scrollok(stdscr, TRUE);
+
+    printw("Iniciando simulacion con NCURSES...\n");
+    printw("\n------------------------------------------------------------\n");
+    printw("PC\tIR\tEAX\tEBX\tECX\tEDX\tMENSAJE\n");
+    printw("\n------------------------------------------------------------\n");
+    refresh();
+
+    // fopen
     // Asegúrate de crear un archivo "codigo.txt" con las instrucciones
     //archivo = fopen("codigos_de_error.txt", "r"); 
     archivo = fopen("codigo.txt","r"); 
 
-    
     if (archivo == NULL) {
-        printf("Error: No se pudo abrir el archivo 'codigo.txt'.\n");
+        printw("\nError: No se pudo abrir el archivo 'codigo.txt'.\n");
+        printw("\nPresiona cualquier tecla para salir...\n");
+        refresh();
+        getch();
+        endwin();
         return 1;
     }
 
-    printf("Iniciando simulacion...\n");
-    printf("PC\tIR\tEAX\tEBX\tECX\tEDX\n"); // Encabezados de la tabla
-    printf("---------------------------------------------------\n");
 
-    // LECTURA DE ARCHIVO (Leer un renglón)
-    // fgets lee hasta encontrar un salto de línea o el fin del archivo
+
+    // Lectura del archivo
+    // fgets lee hasta encontrar un salto de linea
     while (fgets(linea, sizeof(linea), archivo)) {
         
 
         // Eliminar el salto de línea
         linea[strcspn(linea, "\n")] = 0;
         
-        // Limpiar buffers (Importante para no guardar basura de la vuelta anterior)
+        // Limpiar buffers 
         strcpy(operando1, ""); 
         strcpy(operando2, "");
 
-        // OBTENER INSTRUCCIÓN
+        //ontines instrccion
         token = strtok(linea, " ,");
         if (token == NULL) continue; // Línea vacía
         strcpy(instruccion, token);
 
-        // REGLA: DETECTAR COMANDOS DESCONOCIDOS 
+        // detectando arreglso desconocidos
         // Si no es ninguno de los conocidos, es error.
         if (strcmp(instruccion, "MOV") != 0 && strcmp(instruccion, "ADD") != 0 &&
             strcmp(instruccion, "MUL") != 0 && strcmp(instruccion, "DIV") != 0 &&
             strcmp(instruccion, "INC") != 0 && strcmp(instruccion, "DEC") != 0 &&
             strcmp(instruccion, "END") != 0) {
             
-            printf("%d\t%s\tERROR: Instruccion desconocida\n", PC, instruccion);
-            PC++; continue; // Saltamos a la siguiente línea
+            printw("%d\t%s\tERROR: Instruccion desconocida\n", PC, instruccion);
+            refresh(); PC++; continue; // Saltamos a la siguiente línea
         }
 
         // Caso especial END
@@ -99,29 +113,29 @@ int main() {
             if (token != NULL)
             {
                 //si hay un nuemro  despues del end hay un error
-                printf("%d\tEND\tError: la instrcciin end no lleva parametros\n",PC);
+                printw("%d\tEND\tError: la instrcciin end no lleva parametros\n",PC);
             }else{
                 // si es NUll  es corecto
-               printf("%d\tEND\t%d\t%d\t%d\t%d\n", PC, registros[0], registros[1], registros[2], registros[3]);
+               printw("\n%d\tEND\t%d\t%d\t%d\t%d\n", PC, registros[0], registros[1], registros[2], registros[3]);
+               
             }
-            
+            refresh();
             break;
         }
 
-        // OBTENER PRIMER OPERANDO
+        // Obtenemos el primer operando
         token = strtok(NULL, " ,");
         if (token != NULL) strcpy(operando1, token);
-        else {
+        else {  
             // Error si falta el primer operando (Ej: 
-            printf("%d\t%s\tERROR: Faltan operandos\n", PC, instruccion);
-            PC++; continue;
+            printw("%d\t%s\tERROR: Faltan operandos\n", PC, instruccion);
+           refresh(); PC++; continue;
         }
 
         // REGLA: EL DESTINO DEBE SER REGISTRO 
-        // El pizarrón dice "MOV R, V". La izquierda SIEMPRE debe ser registro.
         if (!es_registro_valido(operando1)) {
-            printf("%d\t%s\tERROR: '%s' no es un registro destino valido\n", PC, instruccion, operando1);
-            PC++; continue;
+            printw("%d\t%s\tERROR: '%s' no es un registro destino valido\n", PC, instruccion, operando1);
+            refresh(); PC++; continue;
         }
 
         // Obtener índice del registro destino (ya sabemos que es válido)
@@ -137,16 +151,16 @@ int main() {
         // --- REGLA: INC/DEC SOLO LLEVAN 1 OPERANDO
         if (!necesita_dos && strlen(operando2) > 0) {
             printf("%d\t%s\tERROR: '%s' solo acepta 1 operando\n", PC, instruccion, instruccion);
-            PC++; continue;
+            refresh(); PC++; continue;
         }
 
         // REGLA: MOV/ADD NECESITAN 2 OPERANDOS
         if (necesita_dos && strlen(operando2) == 0) {
              printf("%d\t%s\tERROR: '%s' requiere 2 operandos\n", PC, instruccion, instruccion);
-             PC++; continue;
+            refresh(); PC++; continue;
         }
 
-        // 4. PREPARAR VALORES PARA EJECUTAR
+        //  PREPARAR VALORES PARA EJECUTAR
         int valor2 = 0;
         if (necesita_dos) {
             if (es_registro_valido(operando2)) {
@@ -154,36 +168,42 @@ int main() {
             } else if (es_numero(operando2)) {
                 valor2 = atoi(operando2);
             } else {
-                //  REGLA: OPERANDO 2 INVÁLIDO (Ej: ADD EAX, 5D) 
+                //  REGLA: OPERANDO 2 INVÁLIDO 
                 printf("%d\t%s\tERROR: Segundo operando '%s' invalido\n", PC, instruccion, operando2);
-                PC++; continue;
+                refresh(); PC++; continue;
             }
         }
 
-        // 5. EJECUCIÓN (Con protección de división)
+        // EJECUCION
         if (strcmp(instruccion, "MOV") == 0) registros[idx1] = valor2;
         else if (strcmp(instruccion, "ADD") == 0) registros[idx1] += valor2;
         else if (strcmp(instruccion, "MUL") == 0) registros[idx1] *= valor2;
         else if (strcmp(instruccion, "DIV") == 0) {
             // --- REGLA: DIVISIÓN POR CERO 
             if (valor2 == 0) {
-                printf("%d\tDIV\tERROR: Division por CERO\n", PC);
-                PC++; continue;
+                printw("%d\tDIV\tERROR: Division por CERO\n", PC);
+                refresh(); PC++; continue;
             }
             registros[idx1] /= valor2;
         }
         else if (strcmp(instruccion, "INC") == 0) registros[idx1]++;
         else if (strcmp(instruccion, "DEC") == 0) registros[idx1]--;
 
-        // Imprimir estado actual (Como la tabla del pizarrón)
-        printf("%d\t%s\t%d\t%d\t%d\t%d\n", PC, instruccion, registros[0], registros[1], registros[2], registros[3]);
-        
-        PC++; // Incrementamos el contador de programa
+        // Imprimir estado actual
+        printw("\n%d\t%s\t%d\t%d\t%d\t%d\tok\n", PC, instruccion, registros[0], registros[1], registros[2], registros[3]);
+        refresh();
+        PC++; 
     }
 
-    // 4. CIERRE DE ARCHIVO (fclose)
+    // fclose
     fclose(archivo);
-    printf("---------------------------------------------------\n");
+ // cerramos NCURSES
+    printw("\n------------------------------------------------------------\n");
+    printw("\n Simulacion terminada. Presiona cualquier tecla para salir...\n");
+    refresh(); 
+    
+    getch();   // esta isntruccion espera al precionar cualquier teclas
+    endwin();
 
     return 0;
-}
+}   
